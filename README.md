@@ -17,7 +17,7 @@ to the openssl libraries being too old.
 
 Install the following packages:
 
- apt-get install git gcc binutils cmake libssl-dev python3-cffi
+ sudo apt-get install git gcc binutils cmake libssl-dev python3-cffi
 
 Custom Python
 -------------
@@ -29,7 +29,7 @@ wrapper in Python 3.
 
 Install some pacages needed to build Python 3:
 
- apt-get install git build-essential cmake pkg-config libssl-dev libffi-dev libz-dev wget
+ sudo apt-get install git build-essential cmake pkg-config libssl-dev libffi-dev libz-dev wget
 
 Clone the modified Python 3 repository:
 
@@ -38,11 +38,11 @@ Clone the modified Python 3 repository:
  cd cpython
  LDFLAGS=-Wl,-rpath,$PREFIX/lib ./configure --prefix=/opt/python-nts
  make -j`nproc`
- make install
- mkdir -p /opt/python-nts/ssl
- ln -sf /etc/ssl/ca-certificates.crt /opt/python-nts/ssl/cert.pem
- ln -sf /etc/ssl/certs /opt/python-nts/ssl/certs
- /opt/python-nts/bin/python3 -m pip install cffi
+ sudo make install
+ sudo mkdir -p /opt/python-nts/ssl
+ sudo ln -sf /etc/ssl/ca-certificates.crt /opt/python-nts/ssl/cert.pem
+ sudo ln -sf /etc/ssl/certs /opt/python-nts/ssl/certs
+ sudo /opt/python-nts/bin/python3 -m pip install cffi
 
 Checking out
 ============
