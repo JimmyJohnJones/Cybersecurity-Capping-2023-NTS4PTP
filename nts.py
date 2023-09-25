@@ -19,6 +19,7 @@ or maybe it should be an enum
 
 """
 
+# definition of Cookie field used for NTP
 class NTSCookie(object):
     NONCE_LEN = 16
     KEY_LEN = 32
@@ -32,6 +33,7 @@ class NTSCookie(object):
         self.aead = aes_siv.AES_SIV()
         self.debug = 0
 
+    # decrypt cookies and retrieve server to client & client to server keys
     def unpack(self, keys, cookie):
         if keys.get(cookie[:4]):
             print("chrony cookie")
@@ -91,6 +93,7 @@ class NTSCookie(object):
 
         return keyid, aead_algo, s2c_key, c2s_key
 
+    # generate and encrypt cookies to send 
     def pack(self, keyid, key, aead_algo, s2c_key, c2s_key):
         header = keyid
 
@@ -123,6 +126,7 @@ class NTSCookie(object):
 
         return cookie
 
+# handle NTS extension fields
 class NTSPacketHelper(NTPPacket):
     def __init__(self, unpack_key = None, pack_key = None,  *args, **kwargs):
         NTPPacket.__init__(self, *args, **kwargs)
@@ -133,14 +137,17 @@ class NTSPacketHelper(NTPPacket):
         self.aead = None
         self.unique_identifier = None
 
+    # get AEAD - AES SIV context from aes_siv.py
     def get_aead(self):
         if self.aead is None:
             self.aead = aes_siv.AES_SIV()
         return self.aead
 
+    # same as above
     def get_keyenc(self):
         return self.get_aead()
 
+    # process NTS Authenticator field
     def handle_authenticator(self, field, buf, offset):
         if self.enc_ext is not None:
             raise ValueError("multiple authenticator fields are not allowed")
@@ -214,6 +221,7 @@ class NTSPacketHelper(NTPPacket):
 
         self.unauth_ext = []
 
+    # process any other extension fields
     def handle_field(self, field, buf, offset):
         if field.field_type == NTPExtensionFieldType.Unique_Identifier:
             if 0 and self.unique_identifier is not None:
@@ -224,6 +232,7 @@ class NTSPacketHelper(NTPPacket):
         else:
             self.ext.append(field)
 
+    # generate NTS Authenticator Extension Field
     def pack(self):
         buf = super(NTSPacketHelper, self).pack()
         if self.enc_ext is not None:
@@ -269,6 +278,7 @@ class NTSPacketHelper(NTPPacket):
 
         return buf
 
+# Server NTP/NTS packet handling
 class NTSServerPacketHelper(NTSPacketHelper):
     def __init__(self, keys = {}, *args, **kwargs):
         super(NTSServerPacketHelper, self).__init__(*args, **kwargs)
@@ -276,10 +286,12 @@ class NTSServerPacketHelper(NTSPacketHelper):
         self.nts_cookie = None
         self.keys = keys
 
+    # handle NTS extension fields
     def handle_field(self, field, buf, offset):
         if self.unauth_ext is not None:
             self.unauth_ext.append(field)
 
+        # handle NTS cookies
         elif field.field_type == NTPExtensionFieldType.NTS_Cookie:
             if self.nts_cookie is not None:
                 raise ValueError("multiple cookie fields are not allowed")
@@ -294,32 +306,41 @@ class NTSServerPacketHelper(NTSPacketHelper):
             if self.aead_algo != 15:
                 raise ValueError("only AEAD algo 15 is supported")
 
+        # handle NTS cookie placeholders
         elif field.field_type == NTPExtensionFieldType.NTS_Cookie_Placeholder:
             self.nr_cookie_placeholders += 1
 
+        # handle NTS Authenticator
         elif field.field_type == NTPExtensionFieldType.NTS_Authenticator:
             self.handle_authenticator(field, buf, offset)
 
+        # handle any other fields
         else:
             super(NTSServerPacketHelper, self).handle_field(field, buf, offset)
 
+# Client NTP/NTS packet handling
 class NTSClientPacketHelper(NTSPacketHelper):
     def __init__(self, *args, **kwargs):
         super(NTSClientPacketHelper, self).__init__(*args, **kwargs)
         self.nts_cookies = []
 
+    # handle NTS extension fields
     def handle_field(self, field, buf, offset):
         if self.unauth_ext is not None:
             self.unauth_ext.append(field)
 
+        # handle NTS Cookies
         elif field.field_type == NTPExtensionFieldType.NTS_Cookie:
             raise ValueError("NTS Cookie in plain text")
 
+        # handle NTS Cookie placeholders
         elif field.field_type == NTPExtensionFieldType.NTS_Cookie_Placeholder:
             raise ValueError("NTS Cookie Placeholder in client package")
 
+        # handle NTS Authenticator
         elif field.field_type == NTPExtensionFieldType.NTS_Authenticator:
             self.handle_authenticator(field, buf, offset)
 
+        # handle any other fields
         else:
             super(NTSClientPacketHelper, self).handle_field(field, buf, offset)

@@ -53,6 +53,7 @@ class NTPExtensionField(object):
 
         return b
 
+# base NTP Packet definition
 class NTPPacket(object):
     HEADER_FMT = '>BBBbLL4sQQQQ'
 
@@ -98,6 +99,7 @@ class NTPPacket(object):
 
         self.debug = 0
 
+    # append header, extension fields, macs
     def pack(self):
         flags = ((self.li << 6) |
                  (self.vn << 3) |
@@ -128,6 +130,7 @@ class NTPPacket(object):
 
         return bytes(b''.join(a))
 
+    # print packet info
     def __repr__(self):
         if self.stratum == Stratum.PRIMARY:
             reference_id = bytes(self.reference_id).rstrip(b'\0')
@@ -200,9 +203,11 @@ class NTPPacket(object):
 
         return '\n'.join(a)
 
+    # handle extension fields
     def handle_field(self, field, buf, offset):
         self.ext.append(field)
 
+    # process an NTP packet
     @classmethod
     def unpack(cls, buf, **kwargs):
         offset = 0
@@ -238,6 +243,7 @@ class NTPPacket(object):
             transmit_timestamp = transmit_timestamp,
             **kwargs)
 
+        # handle extension field
         while remain >= 28:
             field_type, field_len = NTPExtensionField.peek(buf, offset)
 
@@ -257,6 +263,7 @@ class NTPPacket(object):
         keyid = None
         mac = None
 
+        # handle mac
         if remain in [ 4, 20, 24 ]:
             packet.keyid = struct.unpack_from('>L', buf, offset)[0]
             packet.mac = buf[offset+4:]

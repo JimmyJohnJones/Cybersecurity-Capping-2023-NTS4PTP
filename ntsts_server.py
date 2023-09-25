@@ -19,8 +19,10 @@ from nts import NTSServerPacketHelper, NTSCookie
 assert sys.version_info[0] == 3
 
 def handle(req, server_key):
+    # generate timestamp on receive
     ts = epoch_to_ntp_ts(time.time())
 
+    # fill response header
     resp = NTSServerPacketHelper(
         mode = Mode.SERVER,
         stratum = 5,
@@ -37,10 +39,12 @@ def handle(req, server_key):
             NTPExtensionFieldType.Unique_Identifier,
             req.unique_identifier))
 
+    # handle NTS extension field
     if req.enc_ext is not None:
         if req.unique_identifier is None:
             raise ValueError("unique identifier missing")
 
+        # populate extension field vals from request
         resp.pack_key = req.pack_key
         resp.enc_ext = []
 
@@ -49,6 +53,7 @@ def handle(req, server_key):
         if req.nr_cookie_placeholders > 7:
             raise ValueError("too many cookie placeholders")
 
+        #append NTS cookies
         for i in range(req.nr_cookie_placeholders + 1):
             cookie = NTSCookie().pack(
                 keyid, key,
@@ -61,6 +66,7 @@ def handle(req, server_key):
     return resp
 
 def main():
+    # setup NTP/NTS time stamp server
     serverhelper = ServerHelper()
     serverhelper.refresh_server_keys()
 
@@ -82,6 +88,7 @@ def main():
 
     sys.stdout.flush()
 
+    # listen for NTP messages from NTP/NTS time stamp client
     while 1:
         try:
             data, addr = sock.recvfrom(65536)
@@ -95,13 +102,16 @@ def main():
 
         print("RECV", repr(addr), len(data), repr(data[:10]))
 
+        # retrieve keys
         keys = serverhelper.get_server_keys()
 
         try:
+            # unpack NTP/NTS request
             req = NTSServerPacketHelper.unpack(data, keys = dict(keys))
             print(req)
             print()
 
+            # generate response and send
             resp = handle(req, server_key = keys[-1])
             buf = resp.pack()
             print("RESP", repr(addr), len(buf), repr(buf[:10]))

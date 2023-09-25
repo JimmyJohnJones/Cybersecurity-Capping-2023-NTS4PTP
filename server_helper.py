@@ -77,6 +77,7 @@ def str_to_bool(s):
 class ServerHelper(object):
     MAX_MASTER_KEYS = 3
 
+    # initialize server helpers
     def __init__(self, config_path = 'server.ini'):
         config = configparser.RawConfigParser(
             allow_no_value = True)
@@ -87,6 +88,7 @@ class ServerHelper(object):
             import sys
             config.write(sys.stdout)
 
+        # grab configs from server.ini along with defaults above
         self.syslog            = config.get('ntske', 'syslog')
         self.ntske_port        = config.get('ntske', 'port')
         self.ntske_server_cert = config.get('ntske', 'server_cert')
@@ -123,6 +125,7 @@ class ServerHelper(object):
         else:
             self.mgmt_port = None
 
+    # generate new server keyid/key randomly
     def add_server_key(self):
         while 1:
             keyid = os.urandom(KEY_ID_LEN)
@@ -141,6 +144,7 @@ class ServerHelper(object):
 
         return key
 
+    # timer to refresh server keys every 60 seconds
     def refresh_server_keys(self):
         try:
             self.load_server_keys()
@@ -151,6 +155,7 @@ class ServerHelper(object):
             t.daemon = True
             t.start()
 
+    # load .key files from server keys directory into _server_keys
     def load_server_keys(self):
         a = []
         for fn in os.listdir(self.server_keys_dir):
@@ -190,9 +195,11 @@ class ServerHelper(object):
 
         self._server_keys = keys
 
+    # get the entire list of keys
     def get_server_keys(self):
         return self._server_keys
 
+    # get just the latest key
     def get_server_key(self):
         return self.get_server_keys()[-1]
 

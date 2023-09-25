@@ -20,6 +20,7 @@ from constants import *
 def randbytes(n):
     return bytearray(random.getrandbits(8) for _ in range(n))
 
+# NTP Client
 class NTSTSClient(object):
     def __init__(self):
         self.host = None
@@ -40,6 +41,7 @@ class NTSTSClient(object):
         self.errors = []
         self.warnings = []
 
+    # generate unique identifier for extension field
     def add_unique_identifier(self, req):
         n = 32
 
@@ -66,10 +68,12 @@ class NTSTSClient(object):
 
         return unique_identifier
 
+    # open communication to NTP server
     def communicate(self):
         self.failure_expected = False
         self.failure_allowed = False
 
+        # open socket
         if self.ipv6_only:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         else:
@@ -77,9 +81,11 @@ class NTSTSClient(object):
 
         sock.settimeout(1)
 
+        # get first cookie from list
         cookie = self.cookies[0]
         del self.cookies[0]
 
+        # generate request with NTS extension field
         req = NTSClientPacketHelper()
         req.debug = self.debug
         req.transmit_timestamp = struct.unpack('Q', os.urandom(8))[0]
@@ -172,6 +178,7 @@ class NTSTSClient(object):
             print("fuzzing: shuffling order of extension fields")
             random.shuffle(req.ext)
 
+        # pack request into buffer and send
         buf = req.pack()
 
         if self.debug:
@@ -194,6 +201,7 @@ class NTSTSClient(object):
             print(nts_addr)
         sock.sendto(buf, nts_addr)
 
+        # receive response
         try:
             data, addr = sock.recvfrom(65536)
         except socket.timeout as e:
@@ -203,6 +211,7 @@ class NTSTSClient(object):
                 self.errors.append(e)
             return
 
+        # take in resp
         try:
             resp = NTSClientPacketHelper.unpack(data, unpack_key = self.s2c_key)
             if self.debug:
@@ -215,6 +224,7 @@ class NTSTSClient(object):
                 self.errors.append(e)
             return
 
+        # check resp for all the necessary fields
         if resp.origin_timestamp != req.transmit_timestamp:
             s = "transmitted origin and received transmit timestamps do not match"
             self.errors.append(s)
@@ -258,6 +268,7 @@ class NTSTSClient(object):
             else:
                 print("unath_ext", len(resp.unauth_ext))
 
+        # add NTS cookies to list of cookies
         self.cookies.extend(resp.nts_cookies)
 
         if resp.stratum == 0:
@@ -274,6 +285,7 @@ class NTSTSClient(object):
             print("success")
 
 def main():
+    # initialize NTP/NTS Time Stamp client
     client = NTSTSClient()
 
     try:
@@ -281,12 +293,14 @@ def main():
     except ImportError:
         import ConfigParser as configparser
 
+    # get config from client.ini file
     config = configparser.RawConfigParser()
     config.read('client.ini')
 
     client.host = config.get('ntpv4', 'server').strip()
     client.port = int(config.get('ntpv4', 'port'))
 
+    # get config from command line
     argi = 1
 
     while argi < len(sys.argv) and sys.argv[argi].startswith('-'):
@@ -335,6 +349,7 @@ def main():
     if not client.cookies:
         raise ValueError("no cookies in client.ini")
 
+    # open communication to NTP server
     status = client.communicate()
     for s in client.infos:
         print("INFO: %s:%s: %s" % (client.host, client.port, s))
@@ -345,6 +360,7 @@ def main():
     if client.errors:
         sys.exit(1)
 
+    # update cookies in client.ini for next time
     if client.cookies:
         config.remove_section('cookies')
         config.add_section('cookies')

@@ -1,5 +1,6 @@
 import struct
 
+# supported record types 
 RT_END_OF_MESSAGE = 0
 RT_NEXT_PROTO_NEG = 1
 RT_ERROR = 2
@@ -28,15 +29,18 @@ class Record:
         self.rec_type = crit_type & 0x7fff
         self.body = rec[4:body_len+4]
 
+    # retrieve length of a record
     def __len__(self):
         return len(self.body)+4
 
+    # retrieve the byte field of a record
     def __bytes__(self):
         crit_type = self.rec_type
         if self.critical:
             crit_type |= 0x8000
         return struct.pack(">HH", crit_type, len(self.body)) + self.body
 
+    # allocate a new record
     @classmethod
     def make(cls, critical, rec_type, body = b''):
         rec = Record()

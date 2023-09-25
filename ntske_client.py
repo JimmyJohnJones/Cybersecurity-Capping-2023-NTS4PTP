@@ -27,6 +27,7 @@ class NTSKEClient(object):
         self.debug = 0
         self.info = 0
 
+    # setup SSL connection to KE server
     def communicate(self):
         wrapper = SSLWrapper()
         wrapper.enable_tlsv1_2()
@@ -54,6 +55,7 @@ class NTSKEClient(object):
         except Exception as e:
             return e
 
+        # set ALPN protocol to NTS_ALPN_PROTO = 'ntske/1'
         proto = s.selected_alpn_protocol()
         if proto != NTS_ALPN_PROTO:
             msg = "failed to negotiate ALPN proto, expected %s, got %s, continuing anyway" % (
@@ -63,28 +65,34 @@ class NTSKEClient(object):
             else:
                 print("WARNING:", msg, file = sys.stderr)
 
+        # allocate NTS Record structure
         records = []
 
+        # 4.1.2. NTS Next Protocol Negotiation 
         npn_neg = Record()
         npn_neg.critical = True
         npn_neg.rec_type = RT_NEXT_PROTO_NEG
         npn_neg.body = struct.pack(">H", 0)
         records.append(npn_neg)
 
+        # 4.1.5. AEAD Algorithm Negotiation 
         aead_neg = Record()
         aead_neg.critical = True
         aead_neg.rec_type = RT_AEAD_NEG
         aead_neg.body = struct.pack(">H", 15)
         records.append(aead_neg)
 
+        # 4.1.1. End of Message 
         eom = Record()
         eom.critical = True
         eom.rec_type = RT_END_OF_MESSAGE
         eom.body = b''
         records.append(eom)
 
+        # send records to KE Server
         s.sendall(b''.join(map(bytes, records)))
 
+        # set variables to receive
         npn_ack = False
         aead_ack = False
         self.cookies = list()
@@ -97,6 +105,7 @@ class NTSKEClient(object):
         do_shutdown = False
 
         while True:
+            # receive response from KE server
             try:
                 resp = s.recv(4)
             except socket.timeout:
@@ -105,6 +114,7 @@ class NTSKEClient(object):
                     break
                 raise IOError("timeout but no EOM seen")
 
+            # error checking
             if resp is None:
                 if eom:
                     print("ragged EOF but EOM seen, continuing", file = sys.stderr)
@@ -126,8 +136,10 @@ class NTSKEClient(object):
             record = Record(resp)
             if self.debug:
                 print(record.critical, record.rec_type, repr(record.body), repr(resp))
+            # received End of Message
             if record.rec_type == RT_END_OF_MESSAGE:
                 eom = True
+            # received Next Protocol Negotiation acknowledgement
             elif record.rec_type == RT_NEXT_PROTO_NEG:
                 if npn_ack:
                     print("Duplicate NPN record", file=sys.stderr)
@@ -136,12 +148,15 @@ class NTSKEClient(object):
                     print("Unacceptable NPN response", file=sys.stderr)
                     return 1
                 npn_ack = True
+            # received error message
             elif record.rec_type == RT_ERROR:
                 print("Received error response", file=sys.stderr)
                 return 1
+            # received warning message
             elif record.rec_type == RT_WARNING:
                 print("Received warning response (aborting)", file=sys.stderr)
                 return 1
+            # received AEAD Algorithm Negotiation Acknowledgement
             elif record.rec_type == RT_AEAD_NEG:
                 if aead_ack:
                     print("Duplicate AEAD record", file=sys.stderr)
@@ -150,27 +165,35 @@ class NTSKEClient(object):
                     print("Unacceptable AEAD response", file=sys.stderr)
                     return 1
                 aead_ack = True
+            # received New Cookie for NTPv4 Message
             elif record.rec_type == RT_NEW_COOKIE:
                 self.cookies.append(record.body)
+            # received Server Negotiation Message
             elif record.rec_type == RT_NTPV4_SERVER:
                 self.ntpv4_server = record.body
+            # received Port Negoatiation Message
             elif record.rec_type == RT_NTPV4_PORT:
                 self.ntpv4_port = struct.unpack(">H", record.body)[0]
+            # received something else
             else:
                 if record.critical:
                     print("Unrecognized critical record", file=sys.stderr)
                     return 1
 
+        # confirm we received Next Protocol Negotiation
         if not npn_ack:
             print("No NPN record in server response", file=sys.stderr)
             return 1
+        # confirm we received AEAD Algorithm Negotiation
         if not aead_ack:
             print("No AEAD record in server response", file=sys.stderr)
             return 1
+        # confirm we received cookies from KE Server
         if len(self.cookies) == 0:
             print("No cookies provided in server response", file=sys.stderr)
             return 1
 
+        # export the cookies for client.ini
         key_label = NTS_TLS_Key_Label
         if self.use_ke_legacy:
             key_label = NTS_TLS_Key_Label_Legacy
@@ -178,15 +201,18 @@ class NTSKEClient(object):
         self.c2s_key = s.export_keying_material(key_label, NTS_TLS_Key_LEN, NTS_TLS_Key_C2S)
         self.s2c_key = s.export_keying_material(key_label, NTS_TLS_Key_LEN, NTS_TLS_Key_S2C)
 
+        # shutdown if failed
         if do_shutdown:
             s.shutdown()
 
+        # print to trace if debug is enabled
         if self.debug:
             print("C2S: " + binascii.hexlify(self.c2s_key).decode('utf-8'))
             print("S2C: " + binascii.hexlify(self.s2c_key).decode('utf-8'))
             for cookie in self.cookies:
                 print("Cookie: " + binascii.hexlify(cookie).decode('utf-8'))
 
+        # export NTP server for client.ini
         if self.ntpv4_server:
             self.ntpv4_server = self.ntpv4_server.decode('ASCII')
             if self.debug:
@@ -194,6 +220,7 @@ class NTSKEClient(object):
         else:
             self.ntpv4_server = self.host
 
+        # export NTP port for client.ini
         if self.ntpv4_port:
             self.ntpv4_port = int(self.ntpv4_port)
             if self.debug:
@@ -207,8 +234,10 @@ class NTSKEClient(object):
         return None
 
 def main(argv):
+    # setup NTS-KE Client
     client = NTSKEClient()
 
+    # process command line arguments
     argi = 1
 
     while argv[argi].startswith('-'):
@@ -254,11 +283,13 @@ def main(argv):
     client.port = int(argv[argi])
     argi += 1
 
+    # open NTS-KE session to KE Server
     e = client.communicate()
     if e:
         print("%s:%s: %s" % (client.host, client.port, e))
         sys.exit(1)
 
+    # write config to client.ini for use by ntsts_client.py
     util.write_client_ini(client)
 
 if __name__ == "__main__":

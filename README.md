@@ -69,7 +69,7 @@ Change directory to the top of the nts-poc-python tree:
 
 To start the NTSKE server, open a terminal and run:
 
- python3 ntske_server.py
+ /opt/python-nts/bin/python3 ntske_server.py
 
 The server uses server.ini for its configuration.  The default is for
 the NTSKE server to listen on TCP port 4446.  The master keys are
@@ -86,7 +86,7 @@ default is for the NTSKE server to listen on TCP port 4123.
 Run the NTSKE client to talk to the NTSKE server and save the results
 to the file "client.ini" and not perform certicate verification (-v).
 
- /opt/python-nts/bin/python3 ntske_client.py -v localhost 4446
+ /opt/python-nts/bin/python3 ntske_client.py -v localhost 4460
 
 Run the NTS client to talk to the NTS server and get a timestamped
 packet back.
