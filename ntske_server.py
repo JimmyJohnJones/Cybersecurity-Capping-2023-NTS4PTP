@@ -40,6 +40,7 @@ ALLOW_MULTIPLE = 0
 # Protocol IDs, see the IANA Network Time Security Next Protocols registry
 SUPPORTED_PROTOCOLS = {
     0,                                  # NTPv4
+    1,                                  # PTPv2.1
     }
 
 # Algorithm identifiers, see RFC5297
