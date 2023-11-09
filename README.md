@@ -49,7 +49,7 @@ Checking out
 
 Clone the repository:
 
- git clone --recursive https://github.com/Netnod/nts-poc-python.git
+ git clone --recursive [https://github.com/Netnod/nts-poc-python.git](https://github.com/JimmyJohnJones/Cybersecurity-Capping-2023-NTS4PTP.git)
 
 Testing the Python implementation
 =================================
