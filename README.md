@@ -62,7 +62,7 @@ Warning: don't remove the assert sys.version_info[0] == 3 from the
 files.  It might seem like it's working, but the SSL.Connection will
 return corrupt data with some NTS servers.
 
-Change directory to the top of the nts-poc-python tree:
+Change directory to the top of the nts-python tree:
 
  cd Cybersecurity-Capping-2023-NTS4PTP
  ./build.sh
