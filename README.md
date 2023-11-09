@@ -64,7 +64,7 @@ return corrupt data with some NTS servers.
 
 Change directory to the top of the nts-poc-python tree:
 
- cd nts-poc-python
+ cd Cybersecurity-Capping-2023-NTS4PTP
  ./build.sh
 
 To start the NTSKE server, open a terminal and run:
