@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 from __future__ import division, print_function, unicode_literals
 
+
 import os
 import sys
 import socket
@@ -45,7 +46,7 @@ SUPPORTED_PROTOCOLS = {
 
 # Algorithm identifiers, see RFC5297
 SUPPORTED_ALGORITHMS = {
-    15,                                 # AEAD_AES_SIV_CMAC_256
+    0,                                 # Multicast Mode
     }
 
 # unpack array from wire
@@ -62,10 +63,10 @@ def pack_array(a):
         return struct.pack('>H', a[0])
     else:
         return struct.pack('>%uH' % len(a), fmt, a)
-
+# will eventually be be flattened in the future, commenting out for now
 # flatten multi-dimension list
-def flatten(a):
-    return [ item for l in a for item in l ]
+# def flatten(a):
+  #  return [ item for l in a for item in l ]
 
 class NTSKEHandler(BaseRequestHandler):
     # handler for NTS KE Requests
@@ -127,12 +128,10 @@ class NTSKEHandler(BaseRequestHandler):
             print("server_key = unhexlify('''%s''')" % hexlify(self.key))
 
         self.npn_protocols = []
-        self.aead_algorithms = []
-        self.eom_received = False
+        self.assoction_modes = []
+        assoc_mode_ack = False
 
         self.errors = set()
-        self.warnings = set()
-
         npn_ack = False
         aead_ack = False
         protocols = []
@@ -156,21 +155,6 @@ class NTSKEHandler(BaseRequestHandler):
             if record.rec_type == RT_END_OF_MESSAGE:
                 break
 
-        # retrieve client to server and server to client keys
-        c2s_key = s.export_keying_material(self.server.key_label, NTS_TLS_Key_LEN, NTS_TLS_Key_C2S)
-        s2c_key = s.export_keying_material(self.server.key_label, NTS_TLS_Key_LEN, NTS_TLS_Key_S2C)
-
-        # build response/acknowledgment records to send back to client
-        response = self.get_response(c2s_key, s2c_key)
-
-        # send to client
-        s.sendall(b''.join(map(bytes, response)))
-
-        # close the handle
-        s.shutdown()
-
-        return 'success'
-
     # print an error message
     def error(self, code, message):
         print("error %u: %s" % (code, message), file = sys.stderr)
@@ -178,12 +162,6 @@ class NTSKEHandler(BaseRequestHandler):
         self.errors.add(code)
         if 0:
             raise ValueError(message)
-
-    # print a warning message
-    def warning(self, code, message):
-        print("warning %u: %s" % (code, message), file = sys.stderr)
-        # add to self.warnings so we know to send warning to client
-        self.warnings.add(code)
 
     # print a notice message
     def notice(self, message):
@@ -243,42 +221,23 @@ class NTSKEHandler(BaseRequestHandler):
 
             # append the record body to self
             self.npn_protocols.append(unpack_array(record.body))
-
-        # process 4.1.5. AEAD Algorithm Negotiation Record
-        elif record.rec_type == RT_AEAD_NEG:
-             # confirm we are allowed to receive multiple AEAD if we already received
-            if self.aead_algorithms:
+   
+        #code to replace 4.1.5 AEAD Algorithm Negotiation Record
+        else-if record.rec_type == RT_ASSOCIATION_MODE:
+            if self.association_modes:
                 if ALLOW_MULTIPLE:
-                    self.notice("Multiple AEAD records")
+                    self.notice("Multiple Association Mode records")
                 else:
-                    self.error(ERR_BAD_REQUEST, "Multiple AEAD records")
-                    return
-
-            # confirm length is even
-            if len(record.body) % 2:
-                self.error(ERR_BAD_REQUEST,
-                           "AEAD record has invalid length")
+                    self.error(ERR_BAD_REQUEST, "Multiple Association Mode records")
+                return 
+                if record.body != 56:
+                    self.error(ERR_BAD_REQUEST, "Association Mode record MUST not be empty")
                 return
-
-            # confirm length is non-zero
-            if not len(record.body):
-                self.error(ERR_BAD_REQUEST,
-                           "AEAD record MUST specify at least one algorithm")
-
-            # append the record body to self
-            self.aead_algorithms.append(unpack_array(record.body))
-
+                self.association_modes.append(unpack_array(record.body))
+            
         # process ERROR record
         elif record.rec_type == RT_ERROR:
             self.error(ERR_BAD_REQUEST, "Received error record")
-
-        # process WARNING record
-        elif record.rec_type == RT_WARNING:
-            self.error(ERR_BAD_REQUEST, "Received warning record")
-
-        # process NEW COOKIE record
-        elif record.rec_type == RT_NEW_COOKIE:
-            self.error(ERR_BAD_REQUEST, "Received new cookie record")
 
         # process any other unknown records
         else:
@@ -289,7 +248,7 @@ class NTSKEHandler(BaseRequestHandler):
                 self.notice("Received unknown record %u" % (record.rec_type))
 
     # finish handling request and construct response to send to client
-    def get_response(self, c2s_key, s2c_key):
+    def get_response(self):
         protocols = []
         # no NPN received
         if not self.npn_protocols:
@@ -308,27 +267,20 @@ class NTSKEHandler(BaseRequestHandler):
             # no (supported) NPN received
             if not protocols:
                 self.error(ERR_BAD_REQUEST, "No supported NPN received")
-
-        algorithms = []
-        # no AEAD received
-        if not self.aead_algorithms:
-            self.error(ERR_BAD_REQUEST, "No AEAD record received")
-        # unable to flatten received records
-        elif not flatten(self.aead_algorithms):
-            pass
-        # flatten AEAD bodies into requested algorithms
+    # updated code
+        modes = []
+        if not self.association_modes:
+            self.error(ERR_BAD_REQUEST, "No Association Modes record recieved")
         else:
-            for algorithm in flatten(self.aead_algorithms):
-                if algorithm in SUPPORTED_ALGORITHMS:
-                    # append to list of algorithms
-                    algorithms.append(algorithm)
-                else:
-                    self.notice("Unknown AEAD algorithm %u" % algorithm)
-            # no (supported) AEAD received
-            if not algorithms:
-                self.error(ERR_BAD_REQUEST, "No supported AEAD algorithms received")
-
-        # client should have sent End of Message
+            for modes in self.association_modes:
+                DomainNumber = 0
+                Sdold = 0
+                SubGroup = 0
+                modes.append(DomainNumber, Sdold, Subgroup)
+            if not modes:
+                self.error(ERR_BAD_REQUEST, "No Association Modes recieved")
+        
+            # client should have sent End of Message
         if not self.eom_received:
             self.error(ERR_BAD_REQUEST, "No EOM record received")
 
@@ -339,10 +291,6 @@ class NTSKEHandler(BaseRequestHandler):
         for code in sorted(self.errors):
             records.append(Record.make(True, RT_ERROR, struct.pack(">H", code)))
 
-        # append WARNING record
-        for code in sorted(self.warnings):
-            records.append(Record.make(True, RT_WARNING, struct.pack(">H", code)))
-
         # append NPN response/acknowledgment for first protocol received
         if protocols:
             records.append(Record.make(True, RT_NEXT_PROTO_NEG,
@@ -352,41 +300,36 @@ class NTSKEHandler(BaseRequestHandler):
             records.append(Record.make(True, RT_NEXT_PROTO_NEG,
                                        b''))
 
-        # append AEAD response/acknowledgment for first algorithm received
-        if algorithms:
-            aead_algo = algorithms[0]
-            records.append(Record.make(True, RT_AEAD_NEG,
-                                       struct.pack('>H', aead_algo)))
-        # otherwise append empty AEAD
-        else:
-            records.append(Record.make(True, RT_AEAD_NEG, b''))
-
         # append End of Message if there were errors (no keys are sent in this case)
         if self.errors:
             records.append(Record.make(True, RT_END_OF_MESSAGE))
             return records
-
-        if DEBUG >= 2:
-            print("c2s_key = unhexlify('''%s''')" % hexlify(c2s_key))
-            print("s2c_key = unhexlify('''%s''')" % hexlify(s2c_key))
-
-        # append the NTPV4 Server record (aka the ip address)
-        if self.server.ntpv4_server is not None:
-            records.append(Record.make(True, RT_NTPV4_SERVER,
-                                       self.server.ntpv4_server))
-
-        # append the NTPV4 Port record (aka 123)
-        if self.server.ntpv4_port is not None:
-            records.append(Record.make(True, RT_NTPV4_PORT,
-                                  struct.pack(">H", self.server.ntpv4_port)))
-
-        # append 8 cookies (from nts.py)
-        for i in range(8):
-            cookie = NTSCookie().pack(
-                self.keyid, self.key,
-                aead_algo, s2c_key, c2s_key)
-            records.append(Record.make(False, RT_NEW_COOKIE, cookie))
-
+        
+        # updated code
+        for self.association_mode in modes:
+            SecurityParameterPointer, KeyID, KeyLength, Key, Lifetime, UpdatePeriod, GracePeriod = accessDatabase(mode);
+            SecurityParameterPointer = int.from_bytes(os.urandom(1), byteorder ="little")
+            KeyID = int.from_bytes(os.urandom(4), byteorde r="little")
+            if KeyID:
+                KeyID = int.from_bytes(os.urandom(4), byteorder ="little")
+            KeyLength = Key.length()
+            Key = int.from_bytes(os.urandom(KeyLength), btyeorder = "big")
+            Lifetime = int.from_bytes(os.urandom(4), byteorder="big")
+            Lifetime_Countdown = 3600
+            while Lifetime_Countdown > 0:
+                os.urandom(1)
+                Lifetime_Countdown -= 1
+            UpdatePeriod = int.from_bytes(os.urandom(4), byteorder = "big")
+            UpdatePeriod = 300
+            GracePeriod = int.from_bytes(os.urandom(4), byteorder = "big")
+            GracePeriod_Countdown = 5
+            while GracePeriod_Countdown > 5:
+                os.urandom(1)
+                GracePeriod_Countdown -= 1
+            paramter_list = list(SecurityParameterPointer, KeyID, KeyLength, Key, Lifetime, UpdatePeriod, GracePeriod)
+            CurrentParameters = struct.pack(f"{len(parameter_list)}i", *parameter_list)
+            record.CurrentParameters = 
+        
         # append the End of Message Record
         records.append(Record.make(True, RT_END_OF_MESSAGE))
 
