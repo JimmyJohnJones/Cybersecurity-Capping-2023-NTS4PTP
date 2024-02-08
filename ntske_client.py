@@ -72,14 +72,13 @@ class NTSKEClient(object):
         npn_neg = Record()
         npn_neg.critical = True
         npn_neg.rec_type = RT_NEXT_PROTO_NEG
-        npn_neg.body = struct.pack(">H", 0)
+        npn_neg.body = struct.pack(">H", 1)
         records.append(npn_neg)
 
-        # 4.1.5. AEAD Algorithm Negotiation 
         aead_neg = Record()
-        aead_neg.critical = True
-        aead_neg.rec_type = RT_AEAD_NEG
-        aead_neg.body = struct.pack(">H", 15)
+        aead_neg.critical() = True
+        aead_neg.rec_type = RT_ASSOCIATION_MODE
+        aead_neg.body = pack(aead_neg.rec_type, 1)
         records.append(aead_neg)
 
         # 4.1.1. End of Message 
@@ -94,11 +93,7 @@ class NTSKEClient(object):
 
         # set variables to receive
         npn_ack = False
-        aead_ack = False
-        self.cookies = list()
-
-        self.ntpv4_server = None
-        self.ntpv4_port = None
+        assoc_mode_ack = False
 
         eom = False
 
@@ -139,12 +134,20 @@ class NTSKEClient(object):
             # received End of Message
             if record.rec_type == RT_END_OF_MESSAGE:
                 eom = True
+            elif record.rec_type == RT_ASSOCIATION_MODE:
+                if RT_ASSOCIATION_MODE:
+                    print("Duplicate association mode record", file=sys.stderr)
+                    return 1
+                if record.body != struct.pack(">H", 1):
+                    print("Unacceptable association response", file=sys.stderr)
+                    return 1
+                RT_ASSOCIATION_MODE = True
             # received Next Protocol Negotiation acknowledgement
             elif record.rec_type == RT_NEXT_PROTO_NEG:
                 if npn_ack:
                     print("Duplicate NPN record", file=sys.stderr)
                     return 1
-                if record.body != struct.pack(">H", 0):
+                if record.body != struct.pack(">H", 1):
                     print("Unacceptable NPN response", file=sys.stderr)
                     return 1
                 npn_ack = True
@@ -152,28 +155,6 @@ class NTSKEClient(object):
             elif record.rec_type == RT_ERROR:
                 print("Received error response", file=sys.stderr)
                 return 1
-            # received warning message
-            elif record.rec_type == RT_WARNING:
-                print("Received warning response (aborting)", file=sys.stderr)
-                return 1
-            # received AEAD Algorithm Negotiation Acknowledgement
-            elif record.rec_type == RT_AEAD_NEG:
-                if aead_ack:
-                    print("Duplicate AEAD record", file=sys.stderr)
-                    return 1
-                if record.body != struct.pack(">H", 15):
-                    print("Unacceptable AEAD response", file=sys.stderr)
-                    return 1
-                aead_ack = True
-            # received New Cookie for NTPv4 Message
-            elif record.rec_type == RT_NEW_COOKIE:
-                self.cookies.append(record.body)
-            # received Server Negotiation Message
-            elif record.rec_type == RT_NTPV4_SERVER:
-                self.ntpv4_server = record.body
-            # received Port Negoatiation Message
-            elif record.rec_type == RT_NTPV4_PORT:
-                self.ntpv4_port = struct.unpack(">H", record.body)[0]
             # received something else
             else:
                 if record.critical:
@@ -184,15 +165,11 @@ class NTSKEClient(object):
         if not npn_ack:
             print("No NPN record in server response", file=sys.stderr)
             return 1
-        # confirm we received AEAD Algorithm Negotiation
-        if not aead_ack:
-            print("No AEAD record in server response", file=sys.stderr)
+        # replaced code to mark assoc mode ack
+        if not assoc_mode_ack:
+            print("No association mode record in the server response", file=sts.stderr)
             return 1
-        # confirm we received cookies from KE Server
-        if len(self.cookies) == 0:
-            print("No cookies provided in server response", file=sys.stderr)
-            return 1
-
+        
         # export the cookies for client.ini
         key_label = NTS_TLS_Key_Label
         if self.use_ke_legacy:
@@ -209,27 +186,10 @@ class NTSKEClient(object):
         if self.debug:
             print("C2S: " + binascii.hexlify(self.c2s_key).decode('utf-8'))
             print("S2C: " + binascii.hexlify(self.s2c_key).decode('utf-8'))
-            for cookie in self.cookies:
-                print("Cookie: " + binascii.hexlify(cookie).decode('utf-8'))
-
-        # export NTP server for client.ini
-        if self.ntpv4_server:
-            self.ntpv4_server = self.ntpv4_server.decode('ASCII')
-            if self.debug:
-                print("NTPv4 server: ", repr(self.ntpv4_server))
-        else:
-            self.ntpv4_server = self.host
-
-        # export NTP port for client.ini
-        if self.ntpv4_port:
-            self.ntpv4_port = int(self.ntpv4_port)
-            if self.debug:
-                print("NTPv4 port:    ", self.ntpv4_port)
-        else:
-            self.ntpv4_port = NTPV4_DEFAULT_PORT
+            
 
         if self.info:
-            print("%s:%s -> %s:%s" % (self.host, self.port, self.ntpv4_server, self.ntpv4_port))
+            print("%s:%s -> %s:%s" % (self.host))
 
         return None
 
@@ -292,9 +252,9 @@ def main(argv):
     # write config to client.ini for use by ntsts_client.py
     util.write_client_ini(client)
 
-if __name__ == "__main__":
+if __name__ == "__main__": # changed path to root Ca Bundle pem file
     if not sys.argv[0]:
-        sys.argv = [ '', 'localhost', '4443', '../ntp/nts/bin/rootCaBundle.pem' ]
+        sys.argv = [ '', 'localhost', '4443', '...Cybersecurity-Capping-2023-NTS4PTP/rootCaBundle.pem']
 
     main(sys.argv)
 

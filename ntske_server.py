@@ -310,12 +310,14 @@ class NTSKEHandler(BaseRequestHandler):
             SecurityParameterPointer, KeyID, KeyLength, Key, Lifetime, UpdatePeriod, GracePeriod = accessDatabase(mode);
             SecurityParameterPointer = int.from_bytes(os.urandom(1), byteorder ="little")
             KeyID = int.from_bytes(os.urandom(4), byteorde r="little")
+            
             if KeyID:
                 KeyID = int.from_bytes(os.urandom(4), byteorder ="little")
             KeyLength = Key.length()
             Key = int.from_bytes(os.urandom(KeyLength), btyeorder = "big")
             Lifetime = int.from_bytes(os.urandom(4), byteorder="big")
             Lifetime_Countdown = 3600
+            
             while Lifetime_Countdown > 0:
                 os.urandom(1)
                 Lifetime_Countdown -= 1
@@ -323,13 +325,28 @@ class NTSKEHandler(BaseRequestHandler):
             UpdatePeriod = 300
             GracePeriod = int.from_bytes(os.urandom(4), byteorder = "big")
             GracePeriod_Countdown = 5
+            
             while GracePeriod_Countdown > 5:
                 os.urandom(1)
                 GracePeriod_Countdown -= 1
             paramter_list = list(SecurityParameterPointer, KeyID, KeyLength, Key, Lifetime, UpdatePeriod, GracePeriod)
             CurrentParameters = struct.pack(f"{len(parameter_list)}i", *parameter_list)
-            record.CurrentParameters = 
-        
+            records.append(Record.make(False, RT_CURRENT_PARAMETERS))
+            
+            if Lifetime < 300:
+                SecurityParameterPointer, IntegrityAlgotithmTypes, KeyID, KeyLength, Key, Lifetime, UpdatePeriod, GracePeriod = accessDatabase(mode)
+                SecurityParameterPointer = int.from_bytes(os.urandom(1), byteorder ="little")
+                # need to fix to ask if already in use
+                for SecurityParameterPointer:
+                    if SecurityParameterPointer:
+                        SecurityParameterPointer = int.from_bytes(os.urandom(1), byteorder ="little")
+                    else:
+                        return
+                KeyID = int.from_bytes(os.urandom(4), byteorder ="little")
+                if KeyID:
+                    KeyID = int.from_bytes(os.urandom(4), byteorder ="little")
+                Key = int.from_bytes(random(KeyLength))
+
         # append the End of Message Record
         records.append(Record.make(True, RT_END_OF_MESSAGE))
 
